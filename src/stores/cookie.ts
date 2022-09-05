@@ -26,8 +26,8 @@ export function key() {
   );
 }
 
-export type WithSession = {
-  session: Session;
+export type WithMaybeSession = {
+  session?: Session;
 };
 
 export function createCookieSessionStorage() {
@@ -79,7 +79,7 @@ export class CookieSessionStorage {
 
 export async function cookieSession(
   req: Request,
-  ctx: MiddlewareHandlerContext<WithSession>,
+  ctx: MiddlewareHandlerContext<WithMaybeSession>,
 ) {
   const { sessionId } = getCookies(req.headers);
   const cookieSessionStorage = await createCookieSessionStorage();
@@ -87,14 +87,10 @@ export async function cookieSession(
   if (
     sessionId && (await cookieSessionStorage.exists(sessionId))
   ) {
-    ctx.state.session = await cookieSessionStorage.get(sessionId);
+    ctx.state.session = cookieSessionStorage.get(sessionId);
+    return cookieSessionStorage.persist(await ctx.next(), ctx.state.session);
   }
 
-  if (!ctx.state.session) {
-    ctx.state.session = cookieSessionStorage.create();
-  }
-
-  const response = await ctx.next();
-
-  return cookieSessionStorage.persist(response, ctx.state.session);
+  ctx.state.session = undefined;
+  return await ctx.next();
 }
