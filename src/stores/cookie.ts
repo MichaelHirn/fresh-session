@@ -1,5 +1,6 @@
 import {
   create,
+  deleteCookie,
   getCookies,
   MiddlewareHandlerContext,
   setCookie,
@@ -27,6 +28,7 @@ export function key() {
 
 export type WithMaybeSession = {
   session?: Session;
+  session_drop?: boolean;
 };
 
 export function createCookieSessionStorage() {
@@ -90,9 +92,23 @@ export async function cookieSession(
     sessionId && (await cookieSessionStorage.exists(sessionId))
   ) {
     ctx.state.session = await cookieSessionStorage.get(sessionId);
-    return cookieSessionStorage.persist(await ctx.next(), ctx.state.session);
+    const response = await ctx.next();
+    if (ctx.state.session instanceof Object) {
+      // if it still exists we attach it
+      return await cookieSessionStorage.persist(response, ctx.state.session);
+    } else {
+      // we remove cookie and drop the session
+      ctx.state.session = undefined;
+      try {
+        deleteCookie(response.headers, "sessionId");
+      } catch (_) {
+        // Headers are immutable, we could clone the repsonse, but it's probably fine as cookies are not present anyway
+        // usually happens with redirects to other domains.
+      }
+      return response;
+    }
   }
 
   ctx.state.session = undefined;
-  return await ctx.next();
+  return ctx.next();
 }
