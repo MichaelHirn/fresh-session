@@ -1,6 +1,5 @@
 import {
   create,
-  decode,
   getCookies,
   MiddlewareHandlerContext,
   setCookie,
@@ -49,17 +48,20 @@ export class CookieSessionStorage {
     return new Session();
   }
 
-  exists(sessionId: string) {
-    return verify(sessionId, this.#key).then(() => true).catch((e) => {
+  async exists(sessionId: string) {
+    return await verify(sessionId, this.#key).then(() => true).catch((_) => {
       console.warn("Invalid JWT token, creating new session...");
       return false;
     });
   }
 
-  get(sessionId: string) {
-    const [, payload] = decode(sessionId);
+  async get(sessionId: string) {
+    const payload: Record<string, unknown> = await verify(sessionId, this.#key);
     const { _flash = {}, ...data } = payload;
-    return new Session(data as object, _flash);
+    return new Session(
+      data as Record<string, unknown>,
+      _flash as Record<string, unknown>,
+    );
   }
 
   async persist(response: Response, session: Session) {
@@ -87,7 +89,7 @@ export async function cookieSession(
   if (
     sessionId && (await cookieSessionStorage.exists(sessionId))
   ) {
-    ctx.state.session = cookieSessionStorage.get(sessionId);
+    ctx.state.session = await cookieSessionStorage.get(sessionId);
     return cookieSessionStorage.persist(await ctx.next(), ctx.state.session);
   }
 
